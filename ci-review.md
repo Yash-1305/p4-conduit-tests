@@ -28,3 +28,33 @@ My rule gave Claude the Node.js fact, so my own workflow already had `node-versi
 ## 4. My reading of the workflow
 - **When, where, the code and Node.js (lines 1–19):** Line 1 gives the workflow its name. Lines 3-4: it runs on every push, to any branch. Line 8: on a fresh Linux computer at GitHub. Line 9: GitHub stops the job after 30 minutes. Lines 11-12 copy my repository onto that computer. Lines 14-19 install Node.js 24, the same major version as my laptop (line 17 says why), and keep the npm packages between runs so later runs are faster.
 - **Packages, browser, tests and the report (lines 20–36):** Lines 21-22 install exactly the package versions from package-lock.json with npm ci. Lines 24-25 install only Chromium, with the Linux system libraries it needs (--with-deps). Lines 27-28 run the whole suite, which starts the app first. Lines 30-36 upload the playwright-report folder as a file called playwright-report, even when tests fail (if: always()), and GitHub keeps it for 30 days.
+
+## 5. The first run on GitHub
+- **Run:** Add the CI workflow · **Result:** green tick · **Tests:** 23 passed (4.6s)
+- **The report (artifact):** Yes, playwright-report is under Artifacts.
+
+## 6. A red run on purpose
+- **The change:** `tests/example.spec.ts` line 6, `toBe(200)` → `toBe(201)`
+- **My prediction:** The step "Run Playwright tests" will turn red, because the test "the API lists the popular tags" fails on line 6: Expected: 201, Received: 200. A GET of /api/tags answers 200, so the test asks for the wrong status. All earlier steps stay green, and "Upload HTML report" still runs because of if: always(), so the report is kept.
+- **What GitHub showed:** Expected: 201 · Received: 200
+
+## 7. Fixed, and green again
+- **The fix:** line 6 back to `toBe(200)` · **Run:** Fix the expected status · **Result:** 23 passed (4.9s)
+
+## 8. Review notes for my other AI-written tests (written while CI ran)
+The API checklist: status · body · shape · negative cases (a refused request changes nothing) · own test data.
+Monday's and Tuesday's tests that I did not review in depth on those days. Each one: kept, changed or removed, and why.
+
+### Monday: `tests/api.spec.ts`
+- "anyone can read an article by its slug": **kept**, because it is a read, it checks exact values, and it makes its own user and article. Nothing changes, so there is nothing to read again.
+- "the author can delete an article and it is gone": **kept**, because it checks 204 and then reads the article again (404 "not found").
+- "creating an article without a token gives 401": **changed**, because it checks 401 and the error, but never reads the data again. It must read the user's articles with a GET and check that nothing was saved.
+- "reading an article that does not exist gives 404": **kept**, because it is a read of a slug that doesn't exist, with the exact status and error. Nothing changes.
+- "changing someone else's article gives 403 and the article stays the same": **changed**, because it reads the article again but checks only the body. It must check that title, description, body and tagList are all unchanged.
+- "deleting someone else's article gives 403 and the article is still there": **changed**, because it reads the article again but checks only status 200. It must also check the article is the same one (same title and body), not only that something answers.
+
+### Tuesday: `tests/contract.spec.ts`
+- "GET /api/user answers with the User shape": **kept**, because it checks 200, the kind of each field, the exact username and email, and the exact key list, with its own user. That is status, body and shape.
+- "changing an article with no token gives 401 "token is missing"": **kept**, because it checks 401 and the exact error, then reads the article again and checks all 6 fields are unchanged, so the refused request is proven to change nothing.
+- "changing an article with a wrong token gives 401 "token is invalid"": **kept**, because the same as test 2, for a wrong token: 401, the exact error, and the same 6 fields unchanged.
+- "changing someone else's article gives 403 "article forbidden"": **kept**, because 403 and the exact error, the same 6 fields unchanged after the GET, and 2 own users, so no shared practice user is changed.
